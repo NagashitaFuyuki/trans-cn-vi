@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>🌏 Dịch Trung → Việt</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 0; }
+    .container { width: 70%; margin: 40px auto; background: white; padding: 20px;
+      border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #333; }
+    textarea { width: 100%; height: 150px; margin: 10px 0; padding: 10px;
+      font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+    button, input[type=file] {
+      margin: 10px auto; padding: 10px 20px; font-size: 16px;
+      background: #0078d7; color: white; border: none; border-radius: 6px; cursor: pointer;
+      display: block;
+    }
+    button:hover { background: #005fa3; }
+    .output { margin-top: 20px; padding: 15px; border: 1px solid #ddd;
+      border-radius: 6px; background: #f9f9f9; min-height: 100px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌏 Dịch Trung → Việt</h1>
+
+    <textarea id="inputText" placeholder="Nhập tiếng Trung..."></textarea>
+    <button onclick="translateText()">Dịch văn bản</button>
+
+    <input type="file" id="fileInput" accept=".txt,.docx,.pdf" />
+    <button onclick="translateFile()">Dịch file (TXT, DOCX, PDF)</button>
+
+    <div class="output" id="outputText">📄 Bản dịch sẽ hiển thị ở đây...</div>
+    <button onclick="downloadResult()">📥 Tải xuống file dịch (TXT)</button>
+  </div>
+
+  <!-- Thư viện đọc DOCX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+  <!-- Thư viện đọc PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+
+  <script>
+    let translatedResult = "";
+
+    // === Dịch văn bản nhập tay ===
+    async function translateText() {
+      const input = document.getElementById("inputText").value.trim();
+      if (!input) {
+        alert("Vui lòng nhập văn bản!");
+        return;
+      }
+      translatedResult = await callTranslateAPI(input);
+      document.getElementById("outputText").innerText = translatedResult;
+    }
+
+    // === Dịch file (txt, docx, pdf) ===
+    async function translateFile() {
+      const file = document.getElementById("fileInput").files[0];
+      if (!file) {
+        alert("Vui lòng chọn file!");
+        return;
+      }
+
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      if (ext === "txt") {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          const content = e.target.result;
+          translatedResult = await callTranslateAPI(content);
+          document.getElementById("outputText").innerText = translatedResult;
+        };
+        reader.readAsText(file, "UTF-8");
+
+      } else if (ext === "docx") {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          mammoth.extractRawText({ arrayBuffer: e.target.result })
+            .then(async function(result) {
+              translatedResult = await callTranslateAPI(result.value);
+              document.getElementById("outputText").innerText = translatedResult;
+            })
+            .catch(err => console.error(err));
+        };
+        reader.readAsArrayBuffer(file);
+
+      } else if (ext === "pdf") {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          const typedarray = new Uint8Array(e.target.result);
+          const pdf = await pdfjsLib.getDocument(typedarray).promise;
+          let textContent = "";
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const text = await page.getTextContent();
+            text.items.forEach(item => { textContent += item.str + " "; });
+          }
+
+          translatedResult = await callTranslateAPI(textContent);
+          document.getElementById("outputText").innerText = translatedResult;
+        };
+        reader.readAsArrayBuffer(file);
+
+      } else {
+        alert("Chỉ hỗ trợ file TXT, DOCX, PDF.");
+      }
+    }
+
+    // === Gọi Google Translate API ===
+    async function callTranslateAPI(text) {
+      const url =
+        "https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-CN&tl=vi&dt=t&q=" +
+        encodeURIComponent(text);
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        let translated = "";
+        data[0].forEach(item => { translated += item[0]; });
+        return translated;
+      } catch (e) {
+        console.error(e);
+        return "❌ Lỗi dịch, thử lại sau.";
+      }
+    }
+
+    // === Xuất file dịch TXT ===
+    function downloadResult() {
+      if (!translatedResult) {
+        alert("Chưa có bản dịch để tải xuống!");
+        return;
+      }
+      const blob = new Blob([translatedResult], { type: "text/plain;charset=utf-8" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "ban_dich.txt";
+      link.click();
+    }
+  </script>
+</body>
+</html>
